@@ -1,44 +1,66 @@
 use std::env;
+use std::ops::Index;
+use std::str::FromStr;
+use std::slice::{Chunks, ChunksMut};
 
-fn newmat(x: usize, y: usize) -> Vec<Vec<f64>> {
-  let inner = vec![0 as f64; y];
-  vec![inner; x]
+struct Mat {
+  rows: usize,
+  columns: usize,
+  data: Vec<f64>,
 }
 
-fn matgen(n: usize) -> Vec<Vec<f64>> {
-  let mut a = newmat(n, n);
+impl Mat {
+  pub fn new(rows: usize, columns: usize) -> Mat {
+     Mat {
+       rows: rows,
+       columns: columns,
+       data: vec![0.0; rows * columns],
+     }
+  }
+
+  pub fn rows(&self) -> usize { self.rows }
+  pub fn columns(&self) -> usize { self.columns }
+
+  pub fn iter(&self) -> Chunks<f64> { self.data.chunks(self.columns) }
+  pub fn iter_mut(&mut self) -> ChunksMut<f64> { self.data.chunks_mut(self.columns) }
+}
+
+impl Index<usize> for Mat {
+  type Output = [f64];
+  fn index(&self, row: usize) -> &[f64] {
+    let start = row * self.columns;
+    &self.data[start..(start + self.columns)]
+  }
+}
+
+fn matgen(n: usize) -> Mat {
+  let mut a = Mat::new(n, n);
   let tmp = 1_f64 / (n as f64) / (n as f64);
-  for i in 0..n {
-    for j in 0..n {
-      let val = tmp * (i as f64 - j as f64) * (i as f64 + j as f64);
-      a[i][j] = val;
+  for (i, row) in a.iter_mut().enumerate() {
+    for (j, element) in row.iter_mut().enumerate() {
+      *element = tmp * (i as f64 - j as f64) * (i as f64 + j as f64);
     }
   }
   a
 }
 
-fn matmul(a: Vec<Vec<f64>>, b: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
-  let m = a.len();
-  let n = a[0].len();
-  let p = b[0].len();
+fn matmul(a: &Mat, b: &Mat) -> Mat {
+  let m = a.rows();
+  let n = a.columns();
+  let p = b.columns();
 
-  let mut b2 = newmat(n, p);
-  for i in 0..n {
-    for j in 0..p {
-      b2[j][i] = b[i][j];
+  let mut b2 = Mat::new(n, p);
+  for (i, row) in b2.iter_mut().enumerate() {
+    for (j, element) in row.iter_mut().enumerate() {
+      *element = b[j][i];
     }
   }
 
-  let mut c = newmat(m, p);
-  for i in 0..m {
-    for j in 0..p {
-      let mut s = 0_f64;
-      let ref ai = a[i];
-      let ref b2j = b2[j];
-      for k in 0..n {
-        s += ai[k] * b2j[k];
-      }
-      c[i][j] = s;
+  let mut c = Mat::new(m, p);
+  for (c_row, a_row) in c.iter_mut().zip(a.iter()) {
+    for (element, b2_row) in c_row.iter_mut().zip(b.iter()) {
+      *element = a_row.iter().zip(b2_row.iter())
+          .fold(0.0f64, |sum, (&x, &y)| sum + x * y);
     }
   }
 
@@ -47,14 +69,14 @@ fn matmul(a: Vec<Vec<f64>>, b: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
 
 fn main() {
   let mut n = 100;
-  if env::args().len() > 1 { 
+  if env::args().len() > 1 {
     let arg1 = env::args().nth(1).unwrap();
-    n = ::std::str::FromStr::from_str(&arg1).unwrap(); 
+    n = FromStr::from_str(&arg1).unwrap();
   }
   n = n / 2 * 2;
 
   let a = matgen(n);
   let b = matgen(n);
-  let c = matmul(a, b);
+  let c = matmul(&a, &b);
   print!("{}\n", c[n / 2][n / 2]);
 }
